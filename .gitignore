@@ -1,0 +1,4 @@
+
+*.pyc
+hsv/healthy/*
+hsv/wssv/*
