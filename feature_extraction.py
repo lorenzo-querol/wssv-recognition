@@ -61,7 +61,7 @@ def extract_glcm(images,
     glcms = []
     with alive_bar(len(images), bar='smooth', spinner=None) as bar:
         for image in images:
-
+            
             grid = np.arange(
                 0, image.shape[1]+1, image.shape[1]//sub_images_num)
 
@@ -106,24 +106,25 @@ def extract_glcm_noloop(images,
     glcms = []
     with alive_bar(len(images), bar='smooth', spinner=None) as bar:
         for image in images:
-            
-            
-      
-            features = []
-            glcm = graycomatrix(image,
-                                distances=dists,
-                                angles=angles,
-                                levels=lvl,
-                                symmetric=sym,
-                                normed=norm)
-
-            glcm_props = [prop for name in props for
-                          prop in graycoprops(glcm, name)[0]]
-
-            for item in glcm_props:
-                features.append(item)
-
-            glcms.append(features)
+            channel_features = []
+            for c in range(3):
+                features = []
+                glcm = graycomatrix(image[:,:,c],
+                                    distances=dists,
+                                    angles=angles,
+                                    levels=lvl,
+                                    symmetric=sym,
+                                    normed=norm)
+        
+                glcm_props = [prop for name in props for
+                              prop in graycoprops(glcm, name)[0]]
+        
+                for item in glcm_props:
+                    features.append(item)
+                
+                channel_features.append(features)
+                
+            glcms.append(channel_features)
             bar()
 
     return np.array(glcms)
