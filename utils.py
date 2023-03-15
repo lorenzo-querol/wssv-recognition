@@ -12,6 +12,8 @@ sns.set_theme(style="ticks")
 from PIL import Image
 import smartcrop
 import cv2
+import glob
+import pandas as pd
 
 from alive_progress import alive_bar
 import os
@@ -31,6 +33,16 @@ def load_images(path):
             bar()
 
     return np.array(images, dtype=object)
+
+# def load_into_df(path):
+#     image_paths = glob.glob(f'{path}/train/*/*.jpg', recursive=True)
+#     images = load_images(image_paths)
+#     labels = [0 if 'healthy' in path else 1 for path in image_paths]
+#     data = np.column_stack((image_paths, images, labels))
+
+#     df = pd.DataFrame(data, columns=['image_path', 'class'])
+    
+#     return df
 
 def show_raw_images(images, classname, start_index=0):
     fig, axes = plt.subplots(ncols=5, nrows=2, figsize=(16, 2.5))
@@ -80,16 +92,15 @@ def preprocess_images(images):
             preprocessed_images.append(image)
             bar()
     
-    hsv_images = []
-    with alive_bar(len(images), bar='smooth', spinner=None) as bar:
-        for image in images:
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-            image = cv2.resize(image, dsize=(150, 150))
-            image = image / 255.
-            hsv_images.append(image)
-            bar()
+    # hsv_images = []
+    # with alive_bar(len(images), bar='smooth', spinner=None) as bar:
+    #     for image in images:
+    #         image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    #         image = cv2.resize(image, dsize=(150, 150))
+    #         hsv_images.append(image)
+    #         bar()
             
-    return np.array(preprocessed_images), np.array(hsv_images)
+    return np.array(preprocessed_images)
 
 def find_misclassifications(labels, preds):
     indices = []
