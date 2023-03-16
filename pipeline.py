@@ -5,6 +5,12 @@ Created on Tue Mar 14 08:49:42 2023
 @author: Enzo
 """
 
+from data_augmentation import augment_images
+from feature_extraction import extract_lbp, create_histograms, extract_glcm_noloop
+from utils import load_images, show_raw_images, crop_images, preprocess_images
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -28,17 +34,11 @@ from imblearn.pipeline import Pipeline
 import seaborn as sns
 sns.set_theme(style="ticks")
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 plt.rcParams['figure.dpi'] = 600
 
-from utils import load_images, show_raw_images, crop_images, preprocess_images
-from feature_extraction import extract_lbp, create_histograms, extract_glcm_noloop
-from data_augmentation import augment_images
 
 random_state = 42
-#%% Data Loading and Cropping
+# %% Data Loading and Cropping
 
 main_dir = 'wssv-dataset/train'
 main_dir2 = 'wssv-dataset'
@@ -54,7 +54,7 @@ class_1_num_samples = len(class_1)
 print("\nCropping images...")
 class_0_cropped = crop_images(class_0, 150)
 class_1_cropped = crop_images(class_1, 150)
-     
+
 show_raw_images(class_0_cropped, classnames[0])
 show_raw_images(class_1_cropped, classnames[1])
 
@@ -68,23 +68,23 @@ all_images = list(zip(all_images, labels))
 
 x_train, x_test, y_train, y_test = train_test_split(all_images,
                                                     labels,
-                                                    test_size = 0.3,
-                                                    random_state = random_state)
+                                                    test_size=0.3,
+                                                    random_state=random_state)
 
 x_train, y_train = augment_images(x_train, y_train)
-#%% Exploratory Data Analysis - Class Distribution
+# %% Exploratory Data Analysis - Class Distribution
 
-num_per_class = {'healthy': class_0_num_samples, 
+num_per_class = {'healthy': class_0_num_samples,
                  'wssv': class_1_num_samples}
 idx_to_class = {0: 'healthy', 1: 'wssv'}
 
-plt.bar(num_per_class.keys(), num_per_class.values());
-plt.title("Number of Images by Class");
-plt.xlabel('Class Name');
-plt.ylabel('# of Images');
+plt.bar(num_per_class.keys(), num_per_class.values())
+plt.title("Number of Images by Class")
+plt.xlabel('Class Name')
+plt.ylabel('# of Images')
 plt.show()
 
-#%% Exploratory Data Analysis - Resolution Distribution 
+# %% Exploratory Data Analysis - Resolution Distribution
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 5), sharex=True, sharey=True)
 y_height_class0 = []
@@ -108,12 +108,12 @@ for image in class_1:
     y_height_class1.append(h)
     x_width_class1.append(w)
     labels_class1.append('wssv')
-    
+
 res_arr = np.column_stack((
     np.hstack((labels_class0, labels_class1)),
     np.hstack((x_width_class0, x_width_class1)),
     np.hstack((y_height_class0, y_height_class1)),
-    ))
+))
 
 res_df = pd.DataFrame(res_arr, columns=['class', 'width', 'height'])
 
@@ -123,54 +123,57 @@ ax[1].set_xlabel('Width (pixels)')
 ax[1].set_title('Image Sizes of Class 1 | wssv')
 plt.show()
 
-#%% Image Preprocessing and Feature Extraction
+# %% Image Preprocessing and Feature Extraction
 
 x_test_images = [i for i, j in x_test]
 
 x_train_lbp = extract_lbp(x_train[:, 0])
 x_test_lbp = extract_lbp(x_test_images)
-    
+
 print("\nCreating Histograms...")
-x_train_lbp_hist = create_histograms(x_train_lbp, 
-                                     sub_images_num = 3, 
-                                     bins_per_sub_images = 64)
+x_train_lbp_hist = create_histograms(x_train_lbp,
+                                     sub_images_num=3,
+                                     bins_per_sub_images=64)
 
-x_test_lbp_hist = create_histograms(x_test_lbp, 
-                                    sub_images_num = 3, 
-                                    bins_per_sub_images = 64)
+x_test_lbp_hist = create_histograms(x_test_lbp,
+                                    sub_images_num=3,
+                                    bins_per_sub_images=64)
 
-#%% Create Dataframe for features 
+# %% Create Dataframe for features
 
 # features_with_labels = np.column_stack((labels, lbp_hist))
 # columns = ['class'] + [f'sub_image_{x}' for x in range(features_with_labels.shape[1]-1)]
 # features_df = pd.DataFrame(features_with_labels, columns=columns)
 
-#%% Logistic Regression
+# %% Logistic Regression
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
+                           ('p', PCA(n_components=10)),
                            ('m', SVC())
-                          ])
+                           ])
 
-cv = StratifiedKFold(n_splits = 5, 
-                     shuffle = True, 
-                     random_state = random_state)
+cv = StratifiedKFold(n_splits=5,
+                     shuffle=True,
+                     random_state=random_state)
 scoring = ['accuracy', 'precision_macro', 'recall_macro', 'f1_weighted']
-scores = cross_validate(pipeline, 
-                        x_train_lbp_hist, 
-                        y_train, 
-                        scoring = scoring, 
-                        cv = cv, 
-                        n_jobs = -1,
-                        return_train_score = True)
+scores = cross_validate(pipeline,
+                        x_train_lbp_hist,
+                        y_train,
+                        scoring=scoring,
+                        cv=cv,
+                        n_jobs=-1,
+                        return_train_score=True)
 
 print("\nWithout SMOTE and Tomek-Links")
 print('Mean Training Accuracy: %.4f' % np.mean(scores['train_accuracy']))
-print('Mean Training Precision: %.4f' % np.mean(scores['train_precision_macro']))
+print('Mean Training Precision: %.4f' %
+      np.mean(scores['train_precision_macro']))
 print('Mean Training Recall: %.4f' % np.mean(scores['train_recall_macro']))
 print('Mean Training F1 Score: %.4f' % np.mean(scores['train_f1_weighted']))
 
 print('\nMean Validation Accuracy: %.4f' % np.mean(scores['test_accuracy']))
-print('Mean Validation Precision: %.4f' % np.mean(scores['test_precision_macro']))
+print('Mean Validation Precision: %.4f' %
+      np.mean(scores['test_precision_macro']))
 print('Mean Validation Recall: %.4f' % np.mean(scores['test_recall_macro']))
 print('Mean Validation F1 Score: %.4f' % np.mean(scores['test_f1_weighted']))
 
@@ -185,33 +188,38 @@ plt.show()
 
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
-                           ('r', SMOTETomek(tomek = TomekLinks(sampling_strategy = 'majority'),
-                                            smote = SMOTE(sampling_strategy = 'minority'))), 
+                           ('r', SMOTETomek(tomek=TomekLinks(sampling_strategy='majority'),
+                                            smote=SMOTE(sampling_strategy='minority'))),
+                           ('p', PCA(n_components=10)),
                            ('m', SVC())
-                          ])
+                           ])
 
-cv = StratifiedKFold(n_splits = 5, 
-                     shuffle = True, 
-                     random_state = random_state)
+cv = StratifiedKFold(n_splits=5,
+                     shuffle=True,
+                     random_state=random_state)
 scoring = ['accuracy', 'precision_macro', 'recall_macro', 'f1_weighted']
-scores = cross_validate(pipeline, 
-                        x_train_lbp_hist, 
-                        y_train, 
-                        scoring = scoring, 
-                        cv = cv, 
-                        n_jobs = -1,
-                        return_train_score = True)
+scores = cross_validate(pipeline,
+                        x_train_lbp_hist,
+                        y_train,
+                        scoring=scoring,
+                        cv=cv,
+                        n_jobs=-1,
+                        return_train_score=True)
 
 print("\nAfter Applying SMOTE and Tomek-Links")
 print('Mean Training Accuracy: %.4f' % np.mean(scores['train_accuracy']))
-print('Mean Training Precision: %.4f' % np.mean(scores['train_precision_macro']))
+print('Mean Training Precision: %.4f' %
+      np.mean(scores['train_precision_macro']))
 print('Mean Training Recall: %.4f' % np.mean(scores['train_recall_macro']))
 print('Mean Training F1 Score: %.4f' % np.mean(scores['train_f1_weighted']))
 
 print('\nMean Validation Accuracy: %.4f' % np.mean(scores['test_accuracy']))
-print('Mean Validation Precision: %.4f' % np.mean(scores['test_precision_macro']))
+print('Mean Validation Precision: %.4f' %
+      np.mean(scores['test_precision_macro']))
 print('Mean Validation Recall: %.4f' % np.mean(scores['test_recall_macro']))
 print('Mean Validation F1 Score: %.4f' % np.mean(scores['test_f1_weighted']))
+
+# Create a learning curve
 
 # fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 6), sharey=True)
 
@@ -238,7 +246,7 @@ print('Mean Validation F1 Score: %.4f' % np.mean(scores['test_f1_weighted']))
 
 # print(f'\nSVM train accuracy: {score_svm_train}%')
 # print(f'SVM test accuracy: {score_svm_test}%')
-# print(f'SVM F1 score: {f1_svm}%')    
+# print(f'SVM F1 score: {f1_svm}%')
 
 pipeline.fit(x_train_lbp_hist, y_train)
 y_preds_svm = pipeline.predict(x_test_lbp_hist)
