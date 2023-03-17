@@ -24,7 +24,7 @@ from sklearn.svm import SVC
 from sklearn.feature_selection import SelectKBest, f_classif, chi2, RFECV
 
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_validate, train_test_split
-from sklearn.model_selection import LearningCurveDisplay
+# from sklearn.model_selection import LearningCurveDisplay
 
 from imblearn.combine import SMOTETomek
 from imblearn.over_sampling import SMOTE
@@ -125,9 +125,10 @@ plt.show()
 
 # %% Image Preprocessing and Feature Extraction
 
+x_train_images = [i for i, j in x_train]
 x_test_images = [i for i, j in x_test]
 
-x_train_lbp = extract_lbp(x_train[:, 0])
+x_train_lbp = extract_lbp(x_train_images)
 x_test_lbp = extract_lbp(x_test_images)
 
 print("\nCreating Histograms...")
@@ -148,7 +149,7 @@ x_test_lbp_hist = create_histograms(x_test_lbp,
 # %% Logistic Regression
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
-                           ('p', PCA(n_components=10)),
+                           # ('p', PCA(n_components=12)),
                            ('m', SVC())
                            ])
 
@@ -165,32 +166,46 @@ scores = cross_validate(pipeline,
                         return_train_score=True)
 
 print("\nWithout SMOTE and Tomek-Links")
-print('Mean Training Accuracy: %.4f' % np.mean(scores['train_accuracy']))
-print('Mean Training Precision: %.4f' %
-      np.mean(scores['train_precision_macro']))
-print('Mean Training Recall: %.4f' % np.mean(scores['train_recall_macro']))
-print('Mean Training F1 Score: %.4f' % np.mean(scores['train_f1_weighted']))
+print('\nTraining')
+print('Accuracy: %.4f' % np.mean(scores['train_accuracy']))
+print('Precision: %.4f' % np.mean(scores['train_precision_macro']))
+print('Recall: %.4f' % np.mean(scores['train_recall_macro']))
+print('F1 Score: %.4f' % np.mean(scores['train_f1_weighted']))
 
-print('\nMean Validation Accuracy: %.4f' % np.mean(scores['test_accuracy']))
-print('Mean Validation Precision: %.4f' %
-      np.mean(scores['test_precision_macro']))
-print('Mean Validation Recall: %.4f' % np.mean(scores['test_recall_macro']))
-print('Mean Validation F1 Score: %.4f' % np.mean(scores['test_f1_weighted']))
+print('\nValidation')
+print('\nAccuracy: %.4f' % np.mean(scores['test_accuracy']))
+print('Precision: %.4f' % np.mean(scores['test_precision_macro']))
+print('Recall: %.4f' % np.mean(scores['test_recall_macro']))
+print('F1 Score: %.4f' % np.mean(scores['test_f1_weighted']))
 
 pipeline.fit(x_train_lbp_hist, y_train)
 y_preds_svm = pipeline.predict(x_test_lbp_hist)
+
+score_svm_test = np.round(pipeline.score(x_test_lbp_hist, y_test) * 100, 2)
+f1_svm = f1_score(y_test, y_preds_svm)
+
 cm = confusion_matrix(y_test, y_preds_svm, labels=[0, 1])
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classnames)
 
-disp.plot()
-plt.title('SVM Confusion Matrix Without SMOTE and Tomek-Links')
-plt.show()
+FP = cm.sum(axis=0) - np.diag(cm)
+FN = cm.sum(axis=1) - np.diag(cm)
+TP = np.diag(cm)
+TN = cm.sum() - (FP + FN + TP)
+FNR = FN/(TP+FN)
 
+print('\nTest')
+print('Accuracy: %.4f' % score_svm_test)
+print('F1 score: %.4f' % f1_svm)
+print('False Negative Rate (Healthy): %.4f' % FNR[0])
+print('False Negative Rate (WSSV): %.4f' % FNR[1])
+
+disp.plot()
+plt.show()
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
                            ('r', SMOTETomek(tomek=TomekLinks(sampling_strategy='majority'),
                                             smote=SMOTE(sampling_strategy='minority'))),
-                           ('p', PCA(n_components=10)),
+                           # ('p', PCA(n_components=12)),
                            ('m', SVC())
                            ])
 
@@ -206,53 +221,40 @@ scores = cross_validate(pipeline,
                         n_jobs=-1,
                         return_train_score=True)
 
+
 print("\nAfter Applying SMOTE and Tomek-Links")
-print('Mean Training Accuracy: %.4f' % np.mean(scores['train_accuracy']))
-print('Mean Training Precision: %.4f' %
-      np.mean(scores['train_precision_macro']))
-print('Mean Training Recall: %.4f' % np.mean(scores['train_recall_macro']))
-print('Mean Training F1 Score: %.4f' % np.mean(scores['train_f1_weighted']))
+print('\nTraining')
+print('Accuracy: %.4f' % np.mean(scores['train_accuracy']))
+print('Precision: %.4f' % np.mean(scores['train_precision_macro']))
+print('Recall: %.4f' % np.mean(scores['train_recall_macro']))
+print('F1 Score: %.4f' % np.mean(scores['train_f1_weighted']))
 
-print('\nMean Validation Accuracy: %.4f' % np.mean(scores['test_accuracy']))
-print('Mean Validation Precision: %.4f' %
-      np.mean(scores['test_precision_macro']))
-print('Mean Validation Recall: %.4f' % np.mean(scores['test_recall_macro']))
-print('Mean Validation F1 Score: %.4f' % np.mean(scores['test_f1_weighted']))
-
-# Create a learning curve
-
-# fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 6), sharey=True)
-
-# common_params = {
-#     "X": x_train,
-#     "y": y_train,
-#     "train_sizes": np.linspace(0.1, 1.0, 5),
-#     "cv": StratifiedKFold(n_splits=5),
-#     "score_type": "both",
-#     "n_jobs": 4,
-#     "line_kw": {"marker": "o"},
-#     "std_display_style": "fill_between",
-#     "score_name": "Accuracy",
-# }
-
-# LearningCurveDisplay.from_estimator(pipeline, **common_params)
-# handles, label = ax[ax_idx].get_legend_handles_labels()
-# ax[ax_idx].legend(handles[:2], ["Training Score", "Test Score"])
-# ax[ax_idx].set_title(f"Learning Curve for {estimator.__class__.__name__}")
-
-# score_svm_train = np.round(model_svm.score(x_train, y_train) * 100, 2)
-# score_svm_test = np.round(model_svm.score(x_test, y_test) * 100, 2)
-# f1_svm = np.round(f1_score(y_test, y_preds_svm) * 100, 2)
-
-# print(f'\nSVM train accuracy: {score_svm_train}%')
-# print(f'SVM test accuracy: {score_svm_test}%')
-# print(f'SVM F1 score: {f1_svm}%')
+print('\nValidation')
+print('\nAccuracy: %.4f' % np.mean(scores['test_accuracy']))
+print('Precision: %.4f' % np.mean(scores['test_precision_macro']))
+print('Recall: %.4f' % np.mean(scores['test_recall_macro']))
+print('F1 Score: %.4f' % np.mean(scores['test_f1_weighted']))
 
 pipeline.fit(x_train_lbp_hist, y_train)
 y_preds_svm = pipeline.predict(x_test_lbp_hist)
+
+score_svm_test = np.round(pipeline.score(x_test_lbp_hist, y_test) * 100, 2)
+f1_svm = f1_score(y_test, y_preds_svm)
+
 cm = confusion_matrix(y_test, y_preds_svm, labels=[0, 1])
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classnames)
 
+FP = cm.sum(axis=0) - np.diag(cm)
+FN = cm.sum(axis=1) - np.diag(cm)
+TP = np.diag(cm)
+TN = cm.sum() - (FP + FN + TP)
+FNR = FN/(TP+FN)
+
+print('\nTest')
+print('Accuracy: %.4f' % score_svm_test)
+print('F1 score: %.4f' % f1_svm)
+print('False Negative Rate (Healthy): %.4f' % FNR[0])
+print('False Negative Rate (WSSV): %.4f' % FNR[1])
+
 disp.plot()
-plt.title('SVM Confusion Matrix With SMOTE and Tomek-Links')
 plt.show()
