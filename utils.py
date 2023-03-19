@@ -19,7 +19,7 @@ from alive_progress import alive_bar
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-plt.rcParams["figure.figsize"] = (10, 10)
+plt.rcParams['figure.dpi'] = 600
 
 def load_images(path):
     images = []
@@ -34,22 +34,12 @@ def load_images(path):
 
     return np.array(images, dtype=object)
 
-# def load_into_df(path):
-#     image_paths = glob.glob(f'{path}/train/*/*.jpg', recursive=True)
-#     images = load_images(image_paths)
-#     labels = [0 if 'healthy' in path else 1 for path in image_paths]
-#     data = np.column_stack((image_paths, images, labels))
-
-#     df = pd.DataFrame(data, columns=['image_path', 'class'])
-    
-#     return df
-
 def show_raw_images(images, classname, start_index=0):
-    fig, axes = plt.subplots(ncols=5, nrows=2, figsize=(16, 2.5))
+    fig, axes = plt.subplots(ncols=4, nrows=2)
     plt.suptitle(classname)
     axes = axes.ravel()
     index = start_index
-    for i in range(10):
+    for i in range(8):
         axes[i].imshow(images[index])
         axes[i].set_title(images[index].shape)
         axes[i].get_xaxis().set_visible(False)
@@ -57,6 +47,18 @@ def show_raw_images(images, classname, start_index=0):
         index += 1
     plt.show()
 
+def show_images_with_labels(images, labels, classnames, start_index=0):
+    fig, ax = plt.subplots(ncols=4, nrows=2)
+
+    index = start_index
+    for i in range(8):
+        ax[i].imshow(images[index], cmap='gray')
+        ax[i].set_title(classnames[labels[index]])
+        ax[i].get_xaxis().set_visible(False)
+        ax[i].get_yaxis().set_visible(False)
+        index += 1
+    plt.show()
+    
 def crop_images(images, size):
     sc = smartcrop.SmartCrop()
     cropped_images = []
@@ -91,16 +93,8 @@ def preprocess_images(images):
             image = image / 255.
             preprocessed_images.append(image)
             bar()
-    
-    # hsv_images = []
-    # with alive_bar(len(images), bar='smooth', spinner=None) as bar:
-    #     for image in images:
-    #         image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    #         image = cv2.resize(image, dsize=(150, 150))
-    #         hsv_images.append(image)
-    #         bar()
             
-    return np.array(preprocessed_images)
+    return preprocessed_images
 
 def find_misclassifications(labels, preds):
     indices = []
