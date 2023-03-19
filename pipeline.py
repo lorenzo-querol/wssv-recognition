@@ -7,7 +7,7 @@ Created on Tue Mar 14 08:49:42 2023
 
 from data_augmentation import augment_images
 from feature_extraction import extract_lbp, create_histograms, extract_glcm_noloop
-from utils import load_images, show_raw_images, crop_images, preprocess_images
+from utils import load_images, show_raw_images, show_images_with_labels, crop_images, preprocess_images
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -37,7 +37,7 @@ sns.set_theme(style="ticks")
 plt.rcParams['figure.dpi'] = 600
 
 
-random_state = 42
+random_state = 1
 # %% Data Loading and Cropping
 
 main_dir = 'wssv-dataset/train'
@@ -68,10 +68,10 @@ all_images = list(zip(all_images, labels))
 
 x_train, x_test, y_train, y_test = train_test_split(all_images,
                                                     labels,
-                                                    test_size=0.3,
-                                                    random_state=random_state)
+                                                    test_size = 0.3,
+                                                    random_state = random_state)
 
-x_train, y_train = augment_images(x_train, y_train)
+x_train, y_train = augment_images(x_train, y_train, num_aug=5)
 # %% Exploratory Data Analysis - Class Distribution
 
 num_per_class = {'healthy': class_0_num_samples,
@@ -86,7 +86,7 @@ plt.show()
 
 # %% Exploratory Data Analysis - Resolution Distribution
 
-fig, ax = plt.subplots(1, 2, figsize=(10, 5), sharex=True, sharey=True)
+fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
 y_height_class0 = []
 x_width_class0 = []
 labels_class0 = []
@@ -115,7 +115,7 @@ res_arr = np.column_stack((
     np.hstack((y_height_class0, y_height_class1)),
 ))
 
-res_df = pd.DataFrame(res_arr, columns=['class', 'width', 'height'])
+res_df = pd.DataFrame(res_arr, columns = ['class', 'width', 'height'])
 
 ax[1].scatter(x_width_class1, y_height_class1)
 ax[1].set_ylabel('Height (pixels)')
@@ -131,14 +131,16 @@ x_test_images = [i for i, j in x_test]
 x_train_lbp = extract_lbp(x_train_images)
 x_test_lbp = extract_lbp(x_test_images)
 
+show_images_with_labels(x_train_lbp, labels, classnames)
+
 print("\nCreating Histograms...")
 x_train_lbp_hist = create_histograms(x_train_lbp,
-                                     sub_images_num=3,
-                                     bins_per_sub_images=64)
+                                     sub_images_num = 3,
+                                     bins_per_sub_images = 64)
 
 x_test_lbp_hist = create_histograms(x_test_lbp,
-                                    sub_images_num=3,
-                                    bins_per_sub_images=64)
+                                    sub_images_num = 3,
+                                    bins_per_sub_images = 64)
 
 # %% Create Dataframe for features
 
@@ -149,21 +151,22 @@ x_test_lbp_hist = create_histograms(x_test_lbp,
 # %% Logistic Regression
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
-                           # ('p', PCA(n_components=12)),
-                           ('m', SVC())
+                           ('m', SVC(random_state = random_state))
                            ])
 
-cv = StratifiedKFold(n_splits=5,
-                     shuffle=True,
-                     random_state=random_state)
+cv = StratifiedKFold(n_splits = 5,
+                     shuffle = True,
+                     random_state = random_state)
+
 scoring = ['accuracy', 'precision_macro', 'recall_macro', 'f1_weighted']
+
 scores = cross_validate(pipeline,
                         x_train_lbp_hist,
                         y_train,
-                        scoring=scoring,
-                        cv=cv,
-                        n_jobs=-1,
-                        return_train_score=True)
+                        scoring = scoring,
+                        cv = cv,
+                        n_jobs = -1,
+                        return_train_score = True)
 
 print("\nWithout SMOTE and Tomek-Links")
 print('\nTraining')
@@ -182,10 +185,14 @@ pipeline.fit(x_train_lbp_hist, y_train)
 y_preds_svm = pipeline.predict(x_test_lbp_hist)
 
 score_svm_test = np.round(pipeline.score(x_test_lbp_hist, y_test) * 100, 2)
-f1_svm = f1_score(y_test, y_preds_svm)
+f1_svm = f1_score(y_test, y_preds_svm, average='weighted')
 
-cm = confusion_matrix(y_test, y_preds_svm, labels=[0, 1])
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classnames)
+cm = confusion_matrix(y_test, 
+                      y_preds_svm, 
+                      labels = [0, 1])
+
+disp = ConfusionMatrixDisplay(confusion_matrix = cm, 
+                              display_labels = classnames)
 
 FP = cm.sum(axis=0) - np.diag(cm)
 FN = cm.sum(axis=1) - np.diag(cm)
@@ -203,24 +210,23 @@ disp.plot()
 plt.show()
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
-                           ('r', SMOTETomek(tomek=TomekLinks(sampling_strategy='majority'),
-                                            smote=SMOTE(sampling_strategy='minority'))),
-                           # ('p', PCA(n_components=12)),
-                           ('m', SVC())
+                           ('r', SMOTETomek(tomek = TomekLinks(sampling_strategy = 'majority', 
+                                                               n_jobs = -1),
+                                            smote = SMOTE(sampling_strategy = 'minority'))),
+                           ('m', SVC(random_state = random_state))
                            ])
 
-cv = StratifiedKFold(n_splits=5,
-                     shuffle=True,
-                     random_state=random_state)
-scoring = ['accuracy', 'precision_macro', 'recall_macro', 'f1_weighted']
+cv = StratifiedKFold(n_splits = 5,
+                     shuffle = True,
+                     random_state = random_state)
+
 scores = cross_validate(pipeline,
                         x_train_lbp_hist,
                         y_train,
-                        scoring=scoring,
-                        cv=cv,
-                        n_jobs=-1,
-                        return_train_score=True)
-
+                        scoring = scoring,
+                        cv = cv,
+                        n_jobs = -1,
+                        return_train_score = True)
 
 print("\nAfter Applying SMOTE and Tomek-Links")
 print('\nTraining')
@@ -239,10 +245,14 @@ pipeline.fit(x_train_lbp_hist, y_train)
 y_preds_svm = pipeline.predict(x_test_lbp_hist)
 
 score_svm_test = np.round(pipeline.score(x_test_lbp_hist, y_test) * 100, 2)
-f1_svm = f1_score(y_test, y_preds_svm)
+f1_svm = f1_score(y_test, y_preds_svm, average='weighted')
 
-cm = confusion_matrix(y_test, y_preds_svm, labels=[0, 1])
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classnames)
+cm = confusion_matrix(y_test, 
+                      y_preds_svm, 
+                      labels = [0, 1])
+
+disp = ConfusionMatrixDisplay(confusion_matrix = cm, 
+                              display_labels = classnames)
 
 FP = cm.sum(axis=0) - np.diag(cm)
 FN = cm.sum(axis=1) - np.diag(cm)
