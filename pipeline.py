@@ -24,7 +24,6 @@ from sklearn.svm import SVC
 from sklearn.feature_selection import SelectKBest, f_classif, chi2, RFECV
 
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_validate, train_test_split
-# from sklearn.model_selection import LearningCurveDisplay
 
 from imblearn.combine import SMOTETomek
 from imblearn.over_sampling import SMOTE
@@ -37,7 +36,7 @@ sns.set_theme(style="ticks")
 plt.rcParams['figure.dpi'] = 600
 
 
-random_state = 1
+random_state = 16
 # %% Data Loading and Cropping
 
 main_dir = 'wssv-dataset/train'
@@ -131,7 +130,7 @@ x_test_images = [i for i, j in x_test]
 x_train_lbp = extract_lbp(x_train_images)
 x_test_lbp = extract_lbp(x_test_images)
 
-show_images_with_labels(x_train_lbp, labels, classnames)
+# show_images_with_labels(x_train_lbp, labels, classnames)
 
 print("\nCreating Histograms...")
 x_train_lbp_hist = create_histograms(x_train_lbp,
@@ -151,7 +150,7 @@ x_test_lbp_hist = create_histograms(x_test_lbp,
 # %% Logistic Regression
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
-                           ('m', SVC(random_state = random_state))
+                           ('m', SVC())
                            ])
 
 cv = StratifiedKFold(n_splits = 5,
@@ -210,10 +209,9 @@ disp.plot()
 plt.show()
 
 pipeline = Pipeline(steps=[('s', StandardScaler()),
-                           ('r', SMOTETomek(tomek = TomekLinks(sampling_strategy = 'majority', 
-                                                               n_jobs = -1),
+                           ('r', SMOTETomek(tomek = TomekLinks(sampling_strategy = 'majority'),
                                             smote = SMOTE(sampling_strategy = 'minority'))),
-                           ('m', SVC(random_state = random_state))
+                           ('m', SVC())
                            ])
 
 cv = StratifiedKFold(n_splits = 5,
