@@ -35,13 +35,13 @@ def load_images(path):
     return np.array(images, dtype=object)
 
 def show_raw_images(images, classname, start_index=0):
-    fig, axes = plt.subplots(ncols=4, nrows=2)
+    fig, axes = plt.subplots(ncols=4, nrows=1, figsize=(15, 3))
     plt.suptitle(classname)
     axes = axes.ravel()
     index = start_index
-    for i in range(8):
+    for i in range(4):
         axes[i].imshow(images[index])
-        axes[i].set_title(images[index].shape)
+        # axes[i].set_title(images[index].shape)
         axes[i].get_xaxis().set_visible(False)
         axes[i].get_yaxis().set_visible(False)
         index += 1
@@ -90,7 +90,7 @@ def preprocess_images(images):
         for image in images:
             image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             image = cv2.resize(image, dsize=(150, 150))
-            image = image / 255.
+            # image = image / 255.
             preprocessed_images.append(image)
             bar()
             
