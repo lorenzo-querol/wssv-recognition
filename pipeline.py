@@ -1,9 +1,3 @@
-
-"""
-Created on Mon Mar 20 18:53:54 2023
-
-@author: Enzo
-"""
 # %%
 
 from data_augmentation import augment_images
@@ -15,8 +9,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
-from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, confusion_matrix, ConfusionMatrixDisplay, classification_report, make_scorer
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -24,7 +18,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
 from sklearn.svm import SVC
-from sklearn.feature_selection import SelectKBest, f_classif, chi2, RFE
+from sklearn.feature_selection import SelectKBest, f_classif, chi2, RFECV
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_validate, train_test_split
 
 from imblearn.combine import SMOTETomek
@@ -33,7 +27,7 @@ from imblearn.under_sampling import TomekLinks
 from imblearn.pipeline import Pipeline
 
 sns.set_theme(style="ticks")
-plt.rcParams['figure.dpi'] = 150
+plt.rcParams['figure.dpi'] = 600
 random_state = 42
 
 # %% Data Loading
@@ -91,86 +85,256 @@ x_test_lbp_hist = create_histograms(x_test_lbp,
                                     sub_images_num=3,
                                     bins_per_sub_images=64)
 
-#%% Helper functions
+# %% Helper function
 
 
-def train_validate(pipeline):
-    cv = StratifiedKFold(n_splits=10,
-                         shuffle=True,
-                         random_state=random_state)
-    
-    scoring = ['accuracy', 'precision_macro', 'recall_macro', 'f1_weighted']
+def confusion_matrix_scorer(clf, X, y):
+    y_pred = clf.predict(X)
+    cm = confusion_matrix(y, y_pred)
+
+    FN = cm.sum(axis=1) - np.diag(cm)
+    TP = np.diag(cm)
+    fnr = FN / (TP + FN)
+
+    return {
+        'accuracy': balanced_accuracy_score(y, y_pred),
+        'f1_weighted': f1_score(y, y_pred, average='weighted'),
+        'fnr': fnr[1]
+    }
+
+
+def get_test_metrics(pipeline):
+    pipeline.fit(x_train_lbp_hist, y_train)
+
+    # Training Confusion Matrix
+    y_pred = pipeline.predict(x_train_lbp_hist)
+    cm = confusion_matrix(y_train, y_pred, labels=[0, 1])
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm,
+                                  display_labels=classnames)
+
+    disp.plot(cmap=plt.cm.Oranges, values_format='d')
+    plt.title('Training Confusion Matrix')
+    plt.show()
+
+    # Test Confusion Matrix
+    y_pred = pipeline.predict(x_test_lbp_hist)
+    cm = confusion_matrix(y_test, y_pred, labels=[0, 1])
+
+    FN = cm.sum(axis=1) - np.diag(cm)
+    TP = np.diag(cm)
+    test_fnr = FN / (TP + FN)
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm,
+                                  display_labels=classnames)
+
+    disp.plot(cmap=plt.cm.Oranges, values_format='d')
+    plt.title('Test Confusion Matrix')
+    plt.show()
+
+    return {
+        'test_accuracy': balanced_accuracy_score(y_test, y_pred),
+        'test_f1_weighted': f1_score(y_test, y_pred, average='weighted'),
+        'test_fnr': test_fnr[1],
+    }
+
+
+def evaluate(pipeline, cv, best_params=None):
+
+    if best_params:
+        pipeline.set_params(**best_params)
 
     scores = cross_validate(pipeline,
                             x_train_lbp_hist,
                             y_train,
-                            scoring=scoring,
+                            scoring=confusion_matrix_scorer,
                             cv=cv,
                             n_jobs=-1,
-                            return_train_score=True,
-                            return_estimator=True)
-    
+                            return_train_score=True
+                            )
+
     print('\nTraining')
     print('Accuracy: %.4f' % max(scores['train_accuracy']))
-    print('Precision: %.4f' % max(scores['train_precision_macro']))
-    print('Recall: %.4f' % max(scores['train_recall_macro']))
     print('F1 Score: %.4f' % max(scores['train_f1_weighted']))
+    print('FNR (WSSV): %.4f' % min(scores['train_fnr']))
 
     print('\nValidation')
     print('Accuracy: %.4f' % max(scores['test_accuracy']))
-    print('Precision: %.4f' % max(scores['test_precision_macro']))
-    print('Recall: %.4f' % max(scores['test_recall_macro']))
     print('F1 Score: %.4f' % max(scores['test_f1_weighted']))
-    
-def evaluate(pipeline):
-    pass
+    print('FNR: %.4f' % min(scores['test_fnr']))
 
-# %% Classification
+    test_scores = get_test_metrics(pipeline)
+
+    print('\nTest')
+    print('Accuracy: %.4f' % test_scores['test_accuracy'])
+    print('F1 score: %.4f' % test_scores['test_f1_weighted'])
+    print('FNR (WSSV): %.4f' % test_scores['test_fnr'])
+
+
+def tune_model(pipeline, param_grid):
+    classifier = GridSearchCV(pipeline,
+                              param_grid,
+                              cv=5,
+                              refit=True,
+                              n_jobs=-1)
+
+    classifier.fit(x_train_lbp_hist, y_train)
+    print("\nBest Parameters: ", classifier.best_params_)
+
+    return classifier.best_params_
+
+
+# %% SVM
 
 scaler = StandardScaler()
-classifier1 = SVC(random_state=random_state)
-
-pipeline1 = Pipeline(steps=[('scaler', scaler),
-                            ('classifier', classifier1)
-                            ])
-
-classifier2 = SVC(random_state=random_state)
-
-sampler = SMOTETomek(tomek=TomekLinks(sampling_strategy='majority'),
-                     smote=SMOTE(sampling_strategy='minority')
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+sampler = SMOTETomek(tomek=TomekLinks(sampling_strategy='majority',
+                                      n_jobs=-1),
+                     smote=SMOTE(sampling_strategy='minority'),
+                     n_jobs=-1
                      )
+
+# classifier = SVC(random_state=random_state)
+# pipeline1 = Pipeline(steps=[('scaler', scaler),
+#                             ('svm', classifier)
+#                             ])
+
+# pipeline2 = Pipeline(steps=[('scaler', scaler),
+#                             ('sampler', sampler),
+#                             ('svm', classifier)
+#                             ])
+
+# print("\nWithout SMOTE and Tomek-Links")
+# evaluate(pipeline1, cv)
+
+# print("\nAfter Applying SMOTE and Tomek-Links")
+# evaluate(pipeline2, cv)
+
+# # %% With Hyperparameter Tuning
+
+# C = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+# gamma = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+
+# param_grid_svm = {'svm__C': C, 'svm__gamma': gamma}
+
+# print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
+# best_params1 = tune_model(pipeline1, param_grid_svm)
+# evaluate(pipeline1, cv, best_params1)
+
+# print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
+# best_params2 = tune_model(pipeline2, param_grid_svm)
+# evaluate(pipeline2, cv, best_params2)
+
+# # %% Logistic Regression
+
+# classifier = LogisticRegression(random_state=random_state)
+# pipeline1 = Pipeline(steps=[('scaler', scaler),
+#                             ('lr', classifier)
+#                             ])
+
+# pipeline2 = Pipeline(steps=[('scaler', scaler),
+#                             ('sampler', sampler),
+#                             ('lr', classifier)
+#                             ])
+
+# print("\nWithout SMOTE and Tomek-Links")
+# evaluate(pipeline1, cv)
+
+# print("\nAfter Applying SMOTE and Tomek-Links")
+# evaluate(pipeline2, cv)
+
+# # %% With Hyperparameter Tuning
+
+# C = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+
+# param_grid_lr = {'lr__C': C}
+
+# print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
+# best_params1 = tune_model(pipeline1, param_grid_lr)
+# evaluate(pipeline1, cv, best_params1)
+
+# print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
+# best_params2 = tune_model(pipeline2, param_grid_lr)
+# evaluate(pipeline2, cv, best_params2)
+
+
+# %% MLP
+
+# classifier = MLPClassifier(random_state=random_state)
+# pipeline1 = Pipeline(steps=[('scaler', scaler),
+#                             ('mlp', classifier)
+#                             ])
+
+# pipeline2 = Pipeline(steps=[('scaler', scaler),
+#                             ('sampler', sampler),
+#                             ('mlp', classifier)
+#                             ])
+
+# print("\nWithout SMOTE and Tomek-Links")
+# evaluate(pipeline1, cv)
+
+# print("\nAfter Applying SMOTE and Tomek-Links")
+# evaluate(pipeline2, cv)
+
+# # %% With Hyperparameter Tuning
+
+# hidden_layer_sizes = [(100, 100, 100), (100, 100), (100,)]
+# activation = ['tanh', 'relu']
+# solver = ['sgd', 'adam']
+# alpha = [0.0001, 0.05]
+# learning_rate = ['constant', 'adaptive']
+
+# param_grid_mlp = {'mlp__hidden_layer_sizes': hidden_layer_sizes,
+#                   'mlp__activation': activation,
+#                   'mlp__solver': solver,
+#                   'mlp__alpha': alpha,
+#                   'mlp__learning_rate': learning_rate
+#                   }
+
+# print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
+# best_params1 = tune_model(pipeline1, param_grid_mlp)
+# evaluate(pipeline1, cv, best_params1)
+
+# print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
+# best_params2 = tune_model(pipeline2, param_grid_mlp)
+# evaluate(pipeline2, cv, best_params2)
+
+# %% Decision Tree
+
+classifier = DecisionTreeClassifier(random_state=random_state)
+pipeline1 = Pipeline(steps=[('scaler', scaler),
+                            ('dt', classifier)
+                            ])
 
 pipeline2 = Pipeline(steps=[('scaler', scaler),
                             ('sampler', sampler),
-                            ('classifier', classifier2)
+                            ('dt', classifier)
                             ])
 
 print("\nWithout SMOTE and Tomek-Links")
-train_validate(pipeline1)
+evaluate(pipeline1, cv)
 
 print("\nAfter Applying SMOTE and Tomek-Links")
-train_validate(pipeline2)
+evaluate(pipeline2, cv)
 
+# %% With Hyperparameter Tuning
 
-# pipeline.fit(x_train_lbp_hist, y_train)
-# y_preds_svm = pipeline.predict(x_test_lbp_hist)
+max_depth = [int(x) for x in np.linspace(10, 110, num=11)]
+max_depth.append(None)
+min_samples_split = [2, 5, 10]
+min_samples_leaf = [1, 2, 4]
+criterion = ['gini', 'entropy']
 
-# test_acc = pipeline.score(x_test_lbp_hist, y_test)
-# test_f1 = f1_score(y_test, y_preds_svm)
+param_grid_dt = {'dt__max_depth': max_depth,
+                 'dt__min_samples_split': min_samples_split,
+                 'dt__min_samples_leaf': min_samples_leaf,
+                 'dt__criterion': criterion
+                 }
 
-# cm = confusion_matrix(y_test, y_preds_svm, labels=[0, 1])
-# disp = ConfusionMatrixDisplay(confusion_matrix=cm,
-#                               display_labels=classnames)
+print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
+best_params1 = tune_model(pipeline1, param_grid_dt)
+evaluate(pipeline1, cv, best_params1)
 
-# FN = cm.sum(axis=1) - np.diag(cm)
-# TP = np.diag(cm)
-# FNR = FN / (TP + FN)
-
-# print('\nTest')
-# print('Accuracy: %.4f' % test_acc)
-# print('F1 score: %.4f' % test_f1)
-# print('False Negative Rate (Healthy): %.4f' % FNR[0])
-# print('False Negative Rate (WSSV): %.4f' % FNR[1])
-
-# disp.plot()
-# plt.show()
+print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
+best_params2 = tune_model(pipeline2, param_grid_dt)
+evaluate(pipeline2, cv, best_params2)
