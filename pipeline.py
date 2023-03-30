@@ -21,9 +21,9 @@ from sklearn.svm import SVC
 from sklearn.feature_selection import SelectKBest, f_classif, chi2, RFECV
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_validate, train_test_split
 
-from imblearn.combine import SMOTETomek
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import TomekLinks
+from imblearn.combine import SMOTETomek, SMOTEENN
+from imblearn.over_sampling import SMOTE, BorderlineSMOTE, SVMSMOTE
+from imblearn.under_sampling import TomekLinks, EditedNearestNeighbours
 from imblearn.pipeline import Pipeline
 
 sns.set_theme(style="ticks")
@@ -103,7 +103,7 @@ def confusion_matrix_scorer(clf, X, y):
     }
 
 
-def get_test_metrics(pipeline):
+def get_test_metrics(pipeline, model_str):
     pipeline.fit(x_train_lbp_hist, y_train)
 
     # Training Confusion Matrix
@@ -114,7 +114,7 @@ def get_test_metrics(pipeline):
                                   display_labels=classnames)
 
     disp.plot(cmap=plt.cm.Oranges, values_format='d')
-    plt.title('Training Confusion Matrix')
+    plt.title(model_str + 'Training Confusion Matrix')
     plt.show()
 
     # Test Confusion Matrix
@@ -129,7 +129,7 @@ def get_test_metrics(pipeline):
                                   display_labels=classnames)
 
     disp.plot(cmap=plt.cm.Oranges, values_format='d')
-    plt.title('Test Confusion Matrix')
+    plt.title(model_str + 'Test Confusion Matrix')
     plt.show()
 
     return {
@@ -139,7 +139,7 @@ def get_test_metrics(pipeline):
     }
 
 
-def evaluate(pipeline, cv, best_params=None):
+def evaluate(pipeline, cv, best_params=None, model_str=""):
 
     if best_params:
         pipeline.set_params(**best_params)
@@ -163,7 +163,7 @@ def evaluate(pipeline, cv, best_params=None):
     print('F1 Score: %.4f' % max(scores['test_f1_weighted']))
     print('FNR: %.4f' % min(scores['test_fnr']))
 
-    test_scores = get_test_metrics(pipeline)
+    test_scores = get_test_metrics(pipeline, model_str)
 
     print('\nTest')
     print('Accuracy: %.4f' % test_scores['test_accuracy'])
@@ -188,42 +188,41 @@ def tune_model(pipeline, param_grid):
 
 scaler = StandardScaler()
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
-sampler = SMOTETomek(tomek=TomekLinks(sampling_strategy='majority',
-                                      n_jobs=-1),
-                     smote=SMOTE(sampling_strategy='minority'),
-                     n_jobs=-1
-                     )
 
-# classifier = SVC(random_state=random_state)
-# pipeline1 = Pipeline(steps=[('scaler', scaler),
-#                             ('svm', classifier)
-#                             ])
+oversampler = BorderlineSMOTE(random_state=random_state)
+undersampler = TomekLinks()
 
-# pipeline2 = Pipeline(steps=[('scaler', scaler),
-#                             ('sampler', sampler),
-#                             ('svm', classifier)
-#                             ])
+classifier = SVC(random_state=random_state)
+pipeline1 = Pipeline(steps=[('scaler', scaler),
+                            ('svm', classifier)
+                            ])
 
-# print("\nWithout SMOTE and Tomek-Links")
-# evaluate(pipeline1, cv)
+pipeline2 = Pipeline(steps=[('scaler', scaler),
+                            ('oversample', oversampler),
+                            ('undersample', undersampler),
+                            ('svm', classifier)
+                            ])
 
-# print("\nAfter Applying SMOTE and Tomek-Links")
-# evaluate(pipeline2, cv)
+print("\nWithout SMOTE and Tomek-Links")
+evaluate(pipeline1, cv, model_str="SVM - ")
 
-# # %% With Hyperparameter Tuning
+print("\nAfter Applying SMOTE and Tomek-Links")
+evaluate(pipeline2, cv, model_str="SVM SMOTE & TL - ")
 
-# C = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
-# gamma = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+# %% With Hyperparameter Tuning
 
-# param_grid_svm = {'svm__C': C, 'svm__gamma': gamma}
+C = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+gamma = [0.001, 0.01, 0.1, 1, 10, 100, 1000]
 
-# print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
-# best_params1 = tune_model(pipeline1, param_grid_svm)
-# evaluate(pipeline1, cv, best_params1)
+param_grid_svm = {'svm__C': C, 'svm__gamma': gamma}
 
-# print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
-# best_params2 = tune_model(pipeline2, param_grid_svm)
-# evaluate(pipeline2, cv, best_params2)
+print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
+best_params1 = tune_model(pipeline1, param_grid_svm)
+evaluate(pipeline1, cv, best_params1, model_str="SVM HP Tuned - ")
+
+print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
+best_params2 = tune_model(pipeline2, param_grid_svm)
+evaluate(pipeline2, cv, best_params2, model_str="SVM HP Tuned SMOTE & TL - ")
 
 # # %% Logistic Regression
 
@@ -301,40 +300,40 @@ sampler = SMOTETomek(tomek=TomekLinks(sampling_strategy='majority',
 
 # %% Decision Tree
 
-classifier = DecisionTreeClassifier(random_state=random_state)
-pipeline1 = Pipeline(steps=[('scaler', scaler),
-                            ('dt', classifier)
-                            ])
+# classifier = DecisionTreeClassifier(random_state=random_state)
+# pipeline1 = Pipeline(steps=[('scaler', scaler),
+#                             ('dt', classifier)
+#                             ])
 
-pipeline2 = Pipeline(steps=[('scaler', scaler),
-                            ('sampler', sampler),
-                            ('dt', classifier)
-                            ])
+# pipeline2 = Pipeline(steps=[('scaler', scaler),
+#                             ('sampler', sampler),
+#                             ('dt', classifier)
+#                             ])
 
-print("\nWithout SMOTE and Tomek-Links")
-evaluate(pipeline1, cv)
+# print("\nWithout SMOTE and Tomek-Links")
+# evaluate(pipeline1, cv)
 
-print("\nAfter Applying SMOTE and Tomek-Links")
-evaluate(pipeline2, cv)
+# print("\nAfter Applying SMOTE and Tomek-Links")
+# evaluate(pipeline2, cv)
 
-# %% With Hyperparameter Tuning
+# # %% With Hyperparameter Tuning
 
-max_depth = [int(x) for x in np.linspace(10, 110, num=11)]
-max_depth.append(None)
-min_samples_split = [2, 5, 10]
-min_samples_leaf = [1, 2, 4]
-criterion = ['gini', 'entropy']
+# max_depth = [int(x) for x in np.linspace(10, 110, num=11)]
+# max_depth.append(None)
+# min_samples_split = [2, 5, 10]
+# min_samples_leaf = [1, 2, 4]
+# criterion = ['gini', 'entropy']
 
-param_grid_dt = {'dt__max_depth': max_depth,
-                 'dt__min_samples_split': min_samples_split,
-                 'dt__min_samples_leaf': min_samples_leaf,
-                 'dt__criterion': criterion
-                 }
+# param_grid_dt = {'dt__max_depth': max_depth,
+#                  'dt__min_samples_split': min_samples_split,
+#                  'dt__min_samples_leaf': min_samples_leaf,
+#                  'dt__criterion': criterion
+#                  }
 
-print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
-best_params1 = tune_model(pipeline1, param_grid_dt)
-evaluate(pipeline1, cv, best_params1)
+# print("\nHyperparameter Tuning without SMOTE and Tomek-Links")
+# best_params1 = tune_model(pipeline1, param_grid_dt)
+# evaluate(pipeline1, cv, best_params1)
 
-print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
-best_params2 = tune_model(pipeline2, param_grid_dt)
-evaluate(pipeline2, cv, best_params2)
+# print("\nHyperparameter Tuning after Applying SMOTE and Tomek-Links")
+# best_params2 = tune_model(pipeline2, param_grid_dt)
+# evaluate(pipeline2, cv, best_params2)
