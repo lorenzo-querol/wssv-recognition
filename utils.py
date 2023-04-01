@@ -95,7 +95,6 @@ def preprocess_images(images):
         for image in images:
             image = cv2.cvtColor(np.array(image).astype(
                 'uint8'), cv2.COLOR_RGB2GRAY)
-            # image = cv2.resize(image, dsize=(150, 150))
             # image = image / 255.
             preprocessed_images.append(image)
             bar()
