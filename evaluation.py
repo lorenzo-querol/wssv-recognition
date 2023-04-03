@@ -70,14 +70,19 @@ def create_metrics_df(schemes, split):
 
     df = pd.DataFrame(
         [
-            ['A', scheme_a[f'{split}_accuracy'], scheme_a[f'{split}_f1_weighted'], scheme_a[f'{split}_fnr']],
-            ['B', scheme_b[f'{split}_accuracy'], scheme_b[f'{split}_f1_weighted'], scheme_b[f'{split}_fnr']],
-            ['C', scheme_c[f'{split}_accuracy'], scheme_c[f'{split}_f1_weighted'], scheme_c[f'{split}_fnr']],
-            ['D', scheme_d[f'{split}_accuracy'], scheme_d[f'{split}_f1_weighted'], scheme_d[f'{split}_fnr']]
+            ['A', scheme_a[f'{split}_accuracy'],
+                scheme_a[f'{split}_f1_weighted'], scheme_a[f'{split}_fnr']],
+            ['B', scheme_b[f'{split}_accuracy'],
+                scheme_b[f'{split}_f1_weighted'], scheme_b[f'{split}_fnr']],
+            ['C', scheme_c[f'{split}_accuracy'],
+                scheme_c[f'{split}_f1_weighted'], scheme_c[f'{split}_fnr']],
+            ['D', scheme_d[f'{split}_accuracy'],
+                scheme_d[f'{split}_f1_weighted'], scheme_d[f'{split}_fnr']]
         ],
         columns=['Training Scheme', 'Accuracy', 'F1-Score', 'FNR'])
 
     return df
+
 
 def plot_confusion_matrices(cm1, title1, cm2, title2, sup_title, classnames):
     fig, (ax1, ax2) = plt.subplots(
@@ -97,6 +102,21 @@ def plot_confusion_matrices(cm1, title1, cm2, title2, sup_title, classnames):
     ax2.set_title(title2)
 
     plt.show()
+
+
+def tune_model(pipeline, strat_kfold, param_grid, x_train, y_train):
+    search = RandomizedSearchCV(pipeline,
+                                param_grid,
+                                cv=strat_kfold,
+                                scoring='balanced_accuracy',
+                                random_state=42,
+                                n_jobs=-1)
+
+    search.fit(x_train, y_train)
+    print("\nBest Parameters: ", search.best_params_)
+
+    return search.best_params_
+
 
 def evaluate_model(pipeline, cv, x_train, y_train, x_test, y_test, params):
 
@@ -145,15 +165,41 @@ def evaluate_model(pipeline, cv, x_train, y_train, x_test, y_test, params):
     return train_scores, test_scores
 
 
-def tune_model(pipeline, strat_kfold, param_grid, x_train, y_train):
-    search = RandomizedSearchCV(pipeline,
-                                param_grid,
-                                cv=strat_kfold,
-                                scoring='balanced_accuracy',
-                                random_state=42,
-                                n_jobs=-1)
+def fnr(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
+    FN = cm.sum(axis=1) - np.diag(cm)
+    TP = np.diag(cm)
+    fnr = FN / (TP + FN)
+    return fnr
 
-    search.fit(x_train, y_train)
-    print("\nBest Parameters: ", search.best_params_)
 
-    return search.best_params_
+def evaluate_model_v2(pipeline, cv, X, y, params):
+
+    if params:
+        pipeline.set_params(**params)
+
+    accuracy_scores = []
+    f1_scores = []
+    fnr_scores = []
+
+    for i, (train_idx, valid_idx) in enumerate(cv.split(X, y)):
+
+        x_train, y_train = X[train_idx], y[train_idx]
+        x_valid, y_valid = X[valid_idx], y[valid_idx]
+
+        pipeline.fit(x_train, y_train)
+
+        y_pred = pipeline.predict(x_valid)
+
+        accuracy_scores.append(balanced_accuracy_score(y_valid, y_pred))
+        f1_scores.append(f1_score(y_valid, y_pred, average='weighted'))
+        fnr_scores.append(fnr(y_valid, y_pred))
+
+    print(f'Average Scores of ')
+    print('Accuracy: %.4f' % np.mean(accuracy_scores))
+    print('F1 Score: %.4f' % np.mean(f1_scores))
+    print('FNR (WSSV): %.4f' % np.mean(fnr_scores))
+
+    return {"accuracy_avg": np.mean(accuracy_scores),
+            "f1_score_avg": np.mean(f1_scores),
+            "fnr_avg": np.mean(fnr_scores)}

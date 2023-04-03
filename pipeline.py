@@ -62,7 +62,7 @@ x_train, x_test, y_train, y_test = train_test_split(all_images,
                                                     random_state=random_state)
 
 x_train_raw, y_train_raw = x_train, y_train
-
+ 
 x_train, y_train = augment_images(x_train, y_train, 5)
 
 # %% Exploratory Data Analysis - Class Distribution
@@ -644,12 +644,9 @@ plot_metric_graphs(test_set_df, 'RF - Test')
 
 # %%
 
-hp_train_set_df = create_metrics_df(
-    (hp_a_train, hp_b_train, hp_c_train, hp_d_train), 'train')
-hp_valid_set_df = create_metrics_df(
-    (hp_a_train, hp_b_train, hp_c_train, hp_d_train), 'test')
-hp_test_set_df = create_metrics_df(
-    (hp_a_test, hp_b_test, hp_c_test, hp_d_test), 'test')
+hp_train_set_df = create_metrics_df((hp_a_train, hp_b_train, hp_c_train, hp_d_train), 'train')
+hp_valid_set_df = create_metrics_df((hp_a_train, hp_b_train, hp_c_train, hp_d_train), 'test')
+hp_test_set_df = create_metrics_df((hp_a_test, hp_b_test, hp_c_test, hp_d_test), 'test')
 
 plot_metric_graphs(hp_train_set_df, 'RF - HP Tuned - Train')
 plot_metric_graphs(hp_valid_set_df, 'RF - HP Tuned - Valid')

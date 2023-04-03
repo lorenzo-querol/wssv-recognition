@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import albumentations as A
 from alive_progress import alive_bar
 import numpy as np
@@ -24,9 +22,9 @@ def augment_images(images, labels, num_aug=5):
                 augmented_labels.append(label)
             bar()
 
-    zipped = list(zip(augmented_images, augmented_labels))
-    new_dataset = np.vstack((images, zipped))
+    zipped = zip(augmented_images, augmented_labels)
 
+    new_dataset = np.vstack((zip(images), zipped))
     new_labels = np.hstack((labels, augmented_labels))
 
     return new_dataset, new_labels
