@@ -1,12 +1,7 @@
 # %%
 
-import onnxruntime as ort
-from onnxmltools.utils import save_model
-from skl2onnx import get_latest_tested_opset_version
-from skl2onnx.common.data_types import FloatTensorType
-from skl2onnx import convert_sklearn
 from data_augmentation import augment_images
-from evaluation import create_metrics_df, evaluate_model, evaluate_model_v2, plot_confusion_matrices, tune_model, plot_metric_graphs
+from evaluation import create_metrics_df, create_metrics_df_v2, evaluate_model, evaluate_model_v2, plot_confusion_matrices, tune_model, plot_metric_graphs
 from feature_extraction import extract_lbp, create_histograms, extract_glcm_noloop, split_image
 from utils import load_images, show_raw_images, crop_images, preprocess_images
 
@@ -57,31 +52,32 @@ non_augmented_labels = np.array(
 non_augmented_images = np.vstack((class_0, class_1))
 non_augmented_images = list(zip(non_augmented_images, non_augmented_labels))
 
-augmented_images, augmented_labels = augment_images(
-    non_augmented_images, non_augmented_labels, 5)
+augmented_images = augment_images(
+    non_augmented_images, non_augmented_labels, 10)
+augmented_labels = np.array([label for _, label in augmented_images])
 
 # %% Exploratory Data Analysis - Class Distribution
 
 df = pd.DataFrame(non_augmented_images, columns=['Image', 'Class'])
 df['Class'] = df['Class'].map({0: 'healthy', 1: 'wssv'})
 df['Class'].value_counts().plot(
-    kind='bar', color=plt.get_cmap("Set2").colors,
+    kind='bar', color=plt.get_cmap("Set2").colors,  # type: ignore
     title='Distribution of Classes',
     xlabel='Class Name',
-    ylabel='# of Images') # type: ignore
+    ylabel='# of Images')
 
 # %% Feature Extraction
 
 non_augmented_lbps = extract_lbp([image for image, _ in non_augmented_images])
-augmented_lbps = extract_lbp(augmented_images)
+augmented_lbps = extract_lbp([image for image, _ in augmented_images])
 
 non_augmented_lbp_histograms = create_histograms(non_augmented_lbps,
                                                  sub_images_num=3,
-                                                 bins_per_sub_images=64)
+                                                 bins_per_sub_images=128)
 
 augmented_lbp_histograms = create_histograms(augmented_lbps,
                                              sub_images_num=3,
-                                             bins_per_sub_images=64)
+                                             bins_per_sub_images=128)
 
 # %% Define Models and Pipelines
 
@@ -106,8 +102,8 @@ models = {
                                                 ('classifier', svm)
                                                 ]),
         'param_grid': {
-            'classifier__C': [1000, 100, 10, 1.0, 0.1, 0.01],
-            'classifier__gamma': [1, 0.1, 0.01, 0.001],
+            'classifier__C': [1, 1e2, 1e3, 1e4, 1e5],
+            'classifier__gamma': [1, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],
         }
     },
     'logreg': {
@@ -119,7 +115,7 @@ models = {
                                                 ('classifier', logreg)
                                                 ]),
         'param_grid': {
-            'classifier__C': [100, 10, 1.0, 0.1, 0.01],
+            'classifier__C': [1, 1e2, 1e3, 1e4, 1e5],
             'classifier__solver': ['newton-cg', 'lbfgs', 'liblinear']
         }
     },
@@ -140,163 +136,102 @@ models = {
     }
 }
 
-# %% SVM
-print("No Hyperparameter Tuning")
+# %% Model Training
+
+print("\nNo Hyperparameter Tuning")
 print("\nTraining Scheme A - No Sampling")
-evaluate_model_v2(pipeline=models['svm']['pipeline_no_sample'],
-                  cv=stratified_kfold,
-                  X=non_augmented_lbp_histograms,
-                  y=non_augmented_labels,
-                  params=None)
+a_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_no_sample'],
+                             cv=stratified_kfold,
+                             X=non_augmented_lbp_histograms,
+                             y=non_augmented_labels,
+                             params=None)
 
 
-# print("\nTraining Scheme B - Data Augmentation Only")
-# b_train, b_test = evaluate_model(pipeline=models['svm']['pipeline_raw'],
-#                                  cv=stratified_kfold,
-#                                  x_train=x_train_lbp_hist,
-#                                  y_train=y_train,
-#                                  x_test=x_test_lbp_hist,
-#                                  y_test=y_test,
-#                                  params=None)
+print("\nTraining Scheme B - Data Augmentation Only")
+b_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_no_sample'],
+                             cv=stratified_kfold,
+                             X=augmented_lbp_histograms,
+                             y=augmented_labels,
+                             params=None)
 
 
-# print("\nTraining Scheme C - SMOTE and Tomek Links")
-# c_train, c_test = evaluate_model(pipeline=models['svm']['pipeline_sampled'],
-#                                  cv=strat_kfold,
-#                                  x_train=x_train_raw_lbp_hist,
-#                                  y_train=y_train_raw,
-#                                  x_test=x_test_lbp_hist,
-#                                  y_test=y_test,
-#                                  params=None)
+print("\nTraining Scheme C - SMOTE and Tomek Links")
+c_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_with_sample'],
+                             cv=stratified_kfold,
+                             X=non_augmented_lbp_histograms,
+                             y=non_augmented_labels,
+                             params=None)
 
 
-# print("\nTraining Scheme D - Data Augmentation + SMOTE and Tomek Links")
-# d_train, d_test = evaluate_model(pipeline=models['svm']['pipeline_sampled'],
-#                                  cv=strat_kfold,
-#                                  x_train=x_train_lbp_hist,
-#                                  y_train=y_train,
-#                                  x_test=x_test_lbp_hist,
-#                                  y_test=y_test,
-#                                  params=None)
+print("\nTraining Scheme D - Data Augmentation + SMOTE and Tomek Links")
+d_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_with_sample'],
+                             cv=stratified_kfold,
+                             X=augmented_lbp_histograms,
+                             y=augmented_labels,
+                             params=None)
 
 
-# print("Hyperparameter Optimization")
-# print("\nTraining Scheme A - No Sampling")
-# a_best_params = tune_model(pipeline=models['svm']['pipeline_raw'],
-#                            strat_kfold=strat_kfold,
-#                            param_grid=models['svm']['param_grid'],
-#                            x_train=x_train_raw_lbp_hist,
-#                            y_train=y_train_raw)
+print("\nHyperparameter Optimization")
+print("\nTraining Scheme A - No Sampling")
 
-# hp_a_train, hp_a_test = evaluate_model(pipeline=models['svm']['pipeline_raw'],
-#                                        cv=strat_kfold,
-#                                        x_train=x_train_raw_lbp_hist,
-#                                        y_train=y_train_raw,
-#                                        x_test=x_test_lbp_hist,
-#                                        y_test=y_test,
-#                                        params=a_best_params)
+a_best_params = tune_model(pipeline=models['svm']['pipeline_no_sample'],
+                           cv=stratified_kfold,
+                           param_grid=models['svm']['param_grid'],
+                           X=non_augmented_lbp_histograms,
+                           y=non_augmented_labels)
 
+a_hp_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_no_sample'],
+                                cv=stratified_kfold,
+                                X=non_augmented_lbp_histograms,
+                                y=non_augmented_labels,
+                                params=a_best_params)
 
-# print("\nTraining Scheme B - Data Augmentation Only")
-# b_best_params = tune_model(pipeline=models['svm']['pipeline_raw'],
-#                            strat_kfold=strat_kfold,
-#                            param_grid=models['svm']['param_grid'],
-#                            x_train=x_train_lbp_hist,
-#                            y_train=y_train)
+print("\nTraining Scheme B - Data Augmentation Only")
+b_best_params = tune_model(pipeline=models['svm']['pipeline_no_sample'],
+                           cv=stratified_kfold,
+                           param_grid=models['svm']['param_grid'],
+                           X=augmented_lbp_histograms,
+                           y=augmented_labels)
 
-# hp_b_train, hp_b_test = evaluate_model(pipeline=models['svm']['pipeline_raw'],
-#                                        cv=strat_kfold,
-#                                        x_train=x_train_lbp_hist,
-#                                        y_train=y_train,
-#                                        x_test=x_test_lbp_hist,
-#                                        y_test=y_test,
-#                                        params=b_best_params)
+b_hp_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_no_sample'],
+                                cv=stratified_kfold,
+                                X=augmented_lbp_histograms,
+                                y=augmented_labels,
+                                params=b_best_params)
 
+print("\nTraining Scheme C - SMOTE and Tomek Links")
+c_best_params = tune_model(pipeline=models['svm']['pipeline_with_sample'],
+                           cv=stratified_kfold,
+                           param_grid=models['svm']['param_grid'],
+                           X=non_augmented_lbp_histograms,
+                           y=non_augmented_labels)
 
-# print("\nTraining Scheme C - SMOTE and Tomek Links")
-# c_best_params = tune_model(pipeline=models['svm']['pipeline_sampled'],
-#                            strat_kfold=strat_kfold,
-#                            param_grid=models['svm']['param_grid'],
-#                            x_train=x_train_raw_lbp_hist,
-#                            y_train=y_train_raw)
+c_hp_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_with_sample'],
+                                cv=stratified_kfold,
+                                X=non_augmented_lbp_histograms,
+                                y=non_augmented_labels,
+                                params=c_best_params)
 
-# hp_c_train, hp_c_test = evaluate_model(pipeline=models['svm']['pipeline_sampled'],
-#                                        cv=strat_kfold,
-#                                        x_train=x_train_raw_lbp_hist,
-#                                        y_train=y_train_raw,
-#                                        x_test=x_test_lbp_hist,
-#                                        y_test=y_test,
-#                                        params=c_best_params)
+print("\nTraining Scheme D - Data Augmentation + SMOTE and Tomek Links")
+d_best_params = tune_model(pipeline=models['svm']['pipeline_with_sample'],
+                           cv=stratified_kfold,
+                           param_grid=models['svm']['param_grid'],
+                           X=augmented_lbp_histograms,
+                           y=augmented_labels)
 
-# plot_confusion_matrices(c_test['train_cm'], 'Training',
-#                         c_test['test_cm'], 'Testing',
-#                         'Training Scheme C - SMOTE and Tomek Links',
-#                         classnames=classnames)
+d_hp_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_with_sample'],
+                                cv=stratified_kfold,
+                                X=augmented_lbp_histograms,
+                                y=augmented_labels,
+                                params=d_best_params)
 
+# %% Metric Graphs
 
-# print("\nTraining Scheme D - Data Augmentation + SMOTE and Tomek Links")
-# d_best_params = tune_model(pipeline=models['svm']['pipeline_sampled'],
-#                            strat_kfold=strat_kfold,
-#                            param_grid=models['svm']['param_grid'],
-#                            x_train=x_train_lbp_hist,
-#                            y_train=y_train)
+no_hp_df = create_metrics_df_v2((a_scores, b_scores, c_scores, d_scores))
+plot_metric_graphs(no_hp_df, 'SVM - No Hyperparameter Tuning')
 
-# hp_d_train, hp_d_test = evaluate_model(pipeline=models['svm']['pipeline_sampled'],
-#                                        cv=strat_kfold,
-#                                        x_train=x_train_lbp_hist,
-#                                        y_train=y_train,
-#                                        x_test=x_test_lbp_hist,
-#                                        y_test=y_test,
-#                                        params=d_best_params)
+hp_df = create_metrics_df_v2(
+    (a_hp_scores, b_hp_scores, c_hp_scores, d_hp_scores))
+plot_metric_graphs(hp_df, 'SVM - With Hyperparameter Tuning')
 
 
-# # %%
-
-# # %% Metric Graphs
-# train_set_df = create_metrics_df((a_train, b_train, c_train, d_train), 'train')
-# valid_set_df = create_metrics_df((a_train, b_train, c_train, d_train), 'test')
-# test_set_df = create_metrics_df((a_test, b_test, c_test, d_test), 'test')
-
-# plot_metric_graphs(train_set_df, 'Train')
-# plot_metric_graphs(valid_set_df, 'Valid')
-# plot_metric_graphs(test_set_df, 'Test')
-
-# # %%
-
-# hp_train_set_df = create_metrics_df(
-#     (hp_a_train, hp_b_train, hp_c_train, hp_d_train), 'train')
-# hp_valid_set_df = create_metrics_df(
-#     (hp_a_train, hp_b_train, hp_c_train, hp_d_train), 'test')
-# hp_test_set_df = create_metrics_df(
-#     (hp_a_test, hp_b_test, hp_c_test, hp_d_test), 'test')
-
-# plot_metric_graphs(hp_train_set_df, 'HP Tuned - Train')
-# plot_metric_graphs(hp_valid_set_df, 'HP Tuned - Valid')
-# plot_metric_graphs(hp_test_set_df, 'HP Tuned - Test')
-
-# # %% ONNX Export
-# clf = Pipeline(steps=[('scaler', scaler),
-#                       ('classifier', logreg)
-#                       ])
-# clf.set_params(**{'classifier__solver': 'liblinear',
-#                'classifier__penalty': 'l2', 'classifier__C': 0.01})
-# clf.fit(x_train_lbp_hist, y_train)
-
-# target_opset = get_latest_tested_opset_version()
-# n_features = x_train_lbp_hist.shape[1]
-# onnx_clf = convert_sklearn(
-#     clf,
-#     "logreg_model",
-#     initial_types=[("input", FloatTensorType([None, n_features]))],
-#     target_opset={"": target_opset, "ai.onnx.ml": 1}
-# )
-# save_model(onnx_clf, "logreg_model.onnx")
-
-# # %%
-# model_name = "logreg_model.onnx"
-# sess = ort.InferenceSession(model_name)
-# preds, _ = sess.run(
-#     None, {"input": x_test_lbp_hist.astype(np.float32)}
-# )
-
-# print(classification_report(y_test, preds))

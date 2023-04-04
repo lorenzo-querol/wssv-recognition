@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, balanced_accuracy_score, f1_score, ConfusionMatrixDisplay
 from sklearn.model_selection import RandomizedSearchCV, cross_validate
 
+RANDOM_STATE = 42
+
 
 def confusion_matrix_scorer(clf, X, y):
     y_pred = clf.predict(X)
@@ -104,15 +106,15 @@ def plot_confusion_matrices(cm1, title1, cm2, title2, sup_title, classnames):
     plt.show()
 
 
-def tune_model(pipeline, strat_kfold, param_grid, x_train, y_train):
+def tune_model(pipeline, cv, param_grid, X, y):
     search = RandomizedSearchCV(pipeline,
                                 param_grid,
-                                cv=strat_kfold,
-                                scoring='balanced_accuracy',
-                                random_state=42,
+                                cv=cv,
+                                scoring='f1_weighted',
+                                random_state=RANDOM_STATE,
                                 n_jobs=-1)
 
-    search.fit(x_train, y_train)
+    search.fit(X, y)
     print("\nBest Parameters: ", search.best_params_)
 
     return search.best_params_
@@ -195,7 +197,6 @@ def evaluate_model_v2(pipeline, cv, X, y, params):
         f1_scores.append(f1_score(y_valid, y_pred, average='weighted'))
         fnr_scores.append(fnr(y_valid, y_pred))
 
-    print(f'Average Scores of ')
     print('Accuracy: %.4f' % np.mean(accuracy_scores))
     print('F1 Score: %.4f' % np.mean(f1_scores))
     print('FNR (WSSV): %.4f' % np.mean(fnr_scores))
@@ -203,3 +204,22 @@ def evaluate_model_v2(pipeline, cv, X, y, params):
     return {"accuracy_avg": np.mean(accuracy_scores),
             "f1_score_avg": np.mean(f1_scores),
             "fnr_avg": np.mean(fnr_scores)}
+
+
+def create_metrics_df_v2(schemes):
+    scheme_a, scheme_b, scheme_c, scheme_d = schemes
+
+    df = pd.DataFrame(
+        [
+            ['A', scheme_a[f'accuracy_avg'],
+                scheme_a[f'f1_score_avg'], scheme_a[f'fnr_avg']],
+            ['B', scheme_b[f'accuracy_avg'],
+                scheme_b[f'f1_score_avg'], scheme_b[f'fnr_avg']],
+            ['C', scheme_c[f'accuracy_avg'],
+                scheme_c[f'f1_score_avg'], scheme_c[f'fnr_avg']],
+            ['D', scheme_d[f'accuracy_avg'],
+                scheme_d[f'f1_score_avg'], scheme_d[f'fnr_avg']]
+        ],
+        columns=['Training Scheme', 'Accuracy', 'F1-Score', 'FNR'])
+
+    return df
