@@ -233,5 +233,3 @@ plot_metric_graphs(no_hp_df, 'SVM - No Hyperparameter Tuning')
 hp_df = create_metrics_df_v2(
     (a_hp_scores, b_hp_scores, c_hp_scores, d_hp_scores))
 plot_metric_graphs(hp_df, 'SVM - With Hyperparameter Tuning')
-
-
