@@ -9,6 +9,13 @@ import glob
 import shutil
 import os
 
+from skimage import data
+from matplotlib import pyplot as plt
+from skimage.feature import draw_multiblock_lbp
+from skimage.feature import multiblock_lbp
+import numpy as np
+from numpy.testing import assert_equal
+from skimage.transform import integral_image
 
 def to_hsv(images, dest):
     hsv_images = []
@@ -78,21 +85,42 @@ def to_otsu(images, dest):
     for i, image in enumerate(otsu_images):
         cv2.imwrite(f'{dest}/{i}.jpg', image)
 
+# def multi_block(images):
+    
 
-data_dir = 'wssv-dataset'
-dest_dir = 'hsv'
+data_dir = '../cropped'
+# dest_dir = 'hsv'
 
-healthy = glob.glob(f'{data_dir}/train/healthy/*.jpg')
-wssv = glob.glob(f'{data_dir}/train/wssv/*.jpg')
+healthy = glob.glob(f'{data_dir}/healthy/*.jpg')
+wssv = glob.glob(f'{data_dir}/wssv/*.jpg')
 
-if os.path.isdir(dest_dir):
-    shutil.rmtree(dest_dir)
+# if os.path.isdir(dest_dir):
+#     shutil.rmtree(dest_dir)
 
-healthy_folder = f'{dest_dir}/healthy'
-wssv_folder = f'{dest_dir}/wssv'
+# healthy_folder = f'{dest_dir}/healthy'
+# wssv_folder = f'{dest_dir}/wssv'
 
-os.makedirs(healthy_folder)
-os.makedirs(wssv_folder)
+# os.makedirs(healthy_folder)
+# os.makedirs(wssv_folder)
 
-to_otsu(healthy, healthy_folder)
-to_otsu(wssv, wssv_folder)
+# to_otsu(healthy, healthy_folder)
+# to_otsu(wssv, wssv_folder)
+
+# multi_block(wssv)
+
+for image in wssv:
+    test_img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2GRAY).astype('uint8')
+    
+    # print(test_img)
+    int_img = integral_image(test_img, dtype='int')
+    
+    # print(int_img)
+    lbp_code = multiblock_lbp(int_img, 0, 0, 90, 90)
+
+    img = draw_multiblock_lbp(test_img, 0, 0, 90, 90,
+                              lbp_code=lbp_code, alpha=0.5)
+
+
+    plt.imshow(img)
+
+    plt.show()

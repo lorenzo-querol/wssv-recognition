@@ -1,9 +1,9 @@
 # %%
 
 from data_augmentation import augment_images
-from evaluation import create_metrics_df, create_metrics_df_v2, evaluate_model, evaluate_model_v2, plot_confusion_matrices, tune_model, plot_metric_graphs
+from evaluation import create_metrics_df, create_metrics_df_v2, evaluate_model, evaluate_model_v2, plot_confusion_matrices, train_model, tune_model, plot_metric_graphs
 from feature_extraction import extract_lbp, create_histograms, extract_glcm_noloop, split_image
-from utils import load_images, show_raw_images, crop_images, preprocess_images
+from utils import load_images, show_raw_images, crop_images, preprocess_images, find_misclassifications, show_misclassifications
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -60,24 +60,36 @@ augmented_labels = np.array([label for _, label in augmented_images])
 
 df = pd.DataFrame(non_augmented_images, columns=['Image', 'Class'])
 df['Class'] = df['Class'].map({0: 'healthy', 1: 'wssv'})
-df['Class'].value_counts().plot(
-    kind='bar', color=plt.get_cmap("Set2").colors,  # type: ignore
+bar = df['Class'].value_counts().plot(
+    kind='bar', color=plt.get_cmap("Paired").colors,  # type: ignore
     title='Distribution of Classes',
     xlabel='Class Name',
     ylabel='# of Images')
 
+plt.xticks(rotation=45, ha='right')
+
+for p in bar.containers:  # type: ignore
+    bar.bar_label(p, fmt='%d', label_type='edge')
 # %% Feature Extraction
 
 non_augmented_lbps = extract_lbp([image for image, _ in non_augmented_images])
 augmented_lbps = extract_lbp([image for image, _ in augmented_images])
 
+# sub_images_df = pd.DataFrame(
+#     columns=['image', 'class', 'sub_image_1', 'sub_image_2', 'sub_image_3', 'sub_image_4', 'sub_image_5', 'sub_image_6', 'sub_image_7',
+#              'sub_image_8', 'sub_image_9', 'sub_image_10', 'sub_image_11', 'sub_image_12', 'sub_image_13', 'sub_image_14', 'sub_image_15',
+#              'sub_image_16']
+# )
+
 non_augmented_lbp_histograms = create_histograms(non_augmented_lbps,
-                                                 sub_images_num=3,
-                                                 bins_per_sub_images=128)
+                                                 sub_images_num=4,
+                                                 bins_per_sub_images=64,
+                                                 )
 
 augmented_lbp_histograms = create_histograms(augmented_lbps,
-                                             sub_images_num=3,
-                                             bins_per_sub_images=128)
+                                             sub_images_num=4,
+                                             bins_per_sub_images=64,
+                                             )
 
 # %% Define Models and Pipelines
 
@@ -144,8 +156,9 @@ a_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_no_sample'],
                              cv=stratified_kfold,
                              X=non_augmented_lbp_histograms,
                              y=non_augmented_labels,
-                             params=None)
-
+                             params=None,
+                             images=[image for image, _ in non_augmented_images])
+#%%
 
 print("\nTraining Scheme B - Data Augmentation Only")
 b_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_no_sample'],
@@ -219,11 +232,13 @@ d_best_params = tune_model(pipeline=models['svm']['pipeline_with_sample'],
                            X=augmented_lbp_histograms,
                            y=augmented_labels)
 
+#%%
 d_hp_scores = evaluate_model_v2(pipeline=models['svm']['pipeline_with_sample'],
                                 cv=stratified_kfold,
                                 X=augmented_lbp_histograms,
                                 y=augmented_labels,
-                                params=d_best_params)
+                                params=d_best_params,
+                                images=[image for image, _ in augmented_images])
 
 # %% Metric Graphs
 
@@ -233,3 +248,5 @@ plot_metric_graphs(no_hp_df, 'SVM - No Hyperparameter Tuning')
 hp_df = create_metrics_df_v2(
     (a_hp_scores, b_hp_scores, c_hp_scores, d_hp_scores))
 plot_metric_graphs(hp_df, 'SVM - With Hyperparameter Tuning')
+
+# %% Get Misclassifications

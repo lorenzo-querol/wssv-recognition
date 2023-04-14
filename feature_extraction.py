@@ -9,7 +9,7 @@ import numpy as np
 from alive_progress import alive_bar
 from skimage.feature import graycomatrix, graycoprops
 from skimage.feature import local_binary_pattern
-
+import pandas as pd
 import seaborn as sns
 sns.set_theme(style="ticks")
 
@@ -64,17 +64,27 @@ def create_histograms(images, sub_images_num, bins_per_sub_images):
 
             sub_image_histograms = []
 
+            # temp = {}
+            # temp['image'] = [image]
+            # temp['class'] = label
+            # ctr = 1
+
             for i in range(1, len(grid)):
                 for j in range(1, len(grid)):
                     sub_image = image[grid[i-1]:grid[i], grid[j-1]:grid[j]]
 
-                    # ax[i-1, j-1].imshow(sub_image)
+                    # temp[f'sub_image_{ctr}'] = [sub_image]
+                    # ctr += 1
 
                     sub_image_histogram = np.histogram(
                         sub_image, bins=bins_per_sub_images)[0]
                     sub_image_histograms.append(sub_image_histogram)
 
             histogram = np.array(sub_image_histograms).flatten()
+
+            # temp = pd.DataFrame(temp)
+
+            # sub_images_df = pd.concat([sub_images_df, temp], axis = 1)
 
             all_histograms.append(histogram)
             bar()
@@ -103,7 +113,7 @@ def extract_glcm(images,
             sub_image_features = []
             for i in range(1, len(grid)):
                 for j in range(1, len(grid)):
-                    sub_image = image[grid[i-1]:grid[i], grid[j-1]:grid[j]]
+                    sub_image = image[grid[i-1]: grid[i], grid[j-1]: grid[j]]
 
                     glcm = graycomatrix(sub_image,
                                         distances=dists,

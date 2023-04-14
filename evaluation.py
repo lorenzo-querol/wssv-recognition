@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, balanced_accuracy_score, f1_score, ConfusionMatrixDisplay
 from sklearn.model_selection import RandomizedSearchCV, cross_validate
+from utils import find_misclassifications, show_misclassifications
 
 RANDOM_STATE = 42
 
@@ -173,9 +174,9 @@ def fnr(y_true, y_pred):
     TP = np.diag(cm)
     fnr = FN / (TP + FN)
     return fnr
+    
 
-
-def evaluate_model_v2(pipeline, cv, X, y, params):
+def evaluate_model_v2(pipeline, cv, X, y, params, images=None):
 
     if params:
         pipeline.set_params(**params)
@@ -193,6 +194,12 @@ def evaluate_model_v2(pipeline, cv, X, y, params):
 
         y_pred = pipeline.predict(x_valid)
 
+        if images and i == 4:
+            valid_images = np.array(images)[valid_idx.astype(int)]
+            misclassifications = find_misclassifications(y_valid, y_pred)
+            show_misclassifications(valid_images, misclassifications,
+                                    y_valid, y_pred, start_index=0)
+
         accuracy_scores.append(balanced_accuracy_score(y_valid, y_pred))
         f1_scores.append(f1_score(y_valid, y_pred, average='weighted'))
         fnr_scores.append(fnr(y_valid, y_pred))
@@ -204,6 +211,15 @@ def evaluate_model_v2(pipeline, cv, X, y, params):
     return {"accuracy_avg": np.mean(accuracy_scores),
             "f1_score_avg": np.mean(f1_scores),
             "fnr_avg": np.mean(fnr_scores)}
+
+
+def train_model(pipeline, X, y, params):
+    if params:
+        pipeline.set_params(**params)
+
+    pipeline.fit(X, y)
+
+    return pipeline
 
 
 def create_metrics_df_v2(schemes):

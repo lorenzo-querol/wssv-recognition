@@ -14,6 +14,8 @@ import pandas as pd
 import glob
 import cv2
 import smartcrop
+from matplotlib import gridspec
+
 from PIL import Image
 import seaborn as sns
 sns.set_theme(style="ticks")
@@ -111,19 +113,63 @@ def find_misclassifications(labels, preds):
     return np.array(indices)
 
 
+def arrange_subplots(xs, ys, n_plots):
+      """
+      ---- Parameters ----
+      xs (n_plots, d): list with n_plot different lists of x values that we wish to plot
+      ys (n_plots, d): list with n_plot different lists of y values that we wish to plot
+      n_plots (int): the number of desired subplots
+      """
+    
+      # compute the number of rows and columns
+      n_cols = int(np.sqrt(n_plots))
+      n_rows = int(np.ceil(n_plots / n_cols))
+    
+      # setup the plot
+      gs = gridspec.GridSpec(n_rows, n_cols)
+      scale = max(n_cols, n_rows)
+      fig = plt.figure(figsize=(5 * scale, 5 * scale))
+    
+      # loop through each subplot and plot values there
+      for i in range(n_plots):
+        ax = fig.add_subplot(gs[i])
+        ax.plot(xs[i], ys[i])
+    
 def show_misclassifications(images, misclassified, labels, preds, start_index=0):
-    fig, axes = plt.subplots(ncols=7, nrows=2, figsize=(18, 6))
+    # fig, axes = plt.subplots(ncols=5, nrows=2, figsize=(10, 6))
 
     classnames = ['healthy', 'wssv']
     index = start_index
-    for i in range(2):
-        for j in range(7):
-            axes[i, j].imshow(images[misclassified[index]], cmap='gray')
-            axes[i, j].set_title(f'actual: {classnames[labels[misclassified[index]]]} \n'
-                                 f'pred: {classnames[preds[misclassified[index]]]}')
-            axes[i, j].get_xaxis().set_visible(False)
-            axes[i, j].get_yaxis().set_visible(False)
-            if index == (index+14):
-                break
-            index += 1
-    plt.show()
+    n_plots = 5
+    # compute the number of rows and columns
+    n_rows = int(np.sqrt(n_plots))
+    n_cols = int(np.ceil(n_plots / n_rows))
+  
+    # setup the plot
+    gs = gridspec.GridSpec(n_rows, n_cols)
+    scale = max(n_cols, n_rows)
+    fig = plt.figure(figsize=(3*scale, 3*scale))
+  
+    # loop through each subplot and plot values there
+    for i in range(n_plots):
+        try:
+            ax = fig.add_subplot(gs[i])
+            ax.imshow(images[misclassified[i]], cmap='gray')
+            ax.set_title(f'actual: {classnames[labels[misclassified[index]]]} \n'
+                         f'pred: {classnames[preds[misclassified[index]]]}')
+            ax.set_axis_off()
+        except IndexError:
+            break
+        
+    # for i in range(2):
+    #     for j in range(5):
+    #         try:
+    #             axes[i, j].imshow(images[misclassified[index]], cmap='gray')
+    #             axes[i, j].set_title(f'actual: {classnames[labels[misclassified[index]]]} \n'
+    #                                  f'pred: {classnames[preds[misclassified[index]]]}')
+    #             axes[i, j].axis('off')
+    #             index += 1
+    #         except IndexError:
+    #             break
+
+
