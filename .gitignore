@@ -1,8 +1,0 @@
-.conda
-*.pyc
-hsv/healthy/*
-hsv/wssv/*
-.DS_Store
-.vscode
-wssv-dataset
-cropped
