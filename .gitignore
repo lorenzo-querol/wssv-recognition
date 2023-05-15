@@ -1,4 +1,5 @@
 /wandb
 /weights
+/checkpoints
 /augmented_dataset
 .vscode/settings.json
