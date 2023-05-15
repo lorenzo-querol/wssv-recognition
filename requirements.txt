@@ -4,3 +4,5 @@ wandb==0.15.2
 matplotlib==3.7.1
 tensorflow==2.10.1
 tensorflow_addons
+scikit-learn
+numpy
