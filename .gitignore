@@ -1,5 +1,5 @@
 /wandb
 /weights
-/checkpoints
+/checkpoints_training
 /augmented_dataset
 .vscode/settings.json
