@@ -1,6 +1,6 @@
 /wandb
-/weights
-/checkpoints_training
-/checkpoints
-/augmented_dataset
+/dataset-augmented
+/dataset-segmented
+
+/dataset-split
 .vscode/settings.json
