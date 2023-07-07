@@ -1,0 +1,1 @@
+python3 fine_tune.py --data_dir dataset/4-augmented --flag 2
