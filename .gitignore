@@ -1,6 +1,8 @@
 /wandb
-/dataset-augmented
-/dataset-segmented
 
-/dataset-split
 .vscode/settings.json
+/dataset
+./__pycache__/
+./.ipynb_checkpoints/
+./.vscode/
+/checkpoints

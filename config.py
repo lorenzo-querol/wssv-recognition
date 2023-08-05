@@ -31,7 +31,7 @@ models = {
             pooling="avg",
         ),
         "model_name": "efficientnetv2-b0",
-        "num_layers_to_freeze": 71,  # 210 block6e_dwconv2
+        "num_layers_to_freeze": 71,  #  210 block6e_dwconv2
         "config": dict(
             epochs=300,
             learning_rate=1e-6,

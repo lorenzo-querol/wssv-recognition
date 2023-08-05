@@ -26,28 +26,6 @@ def load_images(path):
     return images
 
 
-def segment_images(images):
-    session = new_session("u2net")
-
-    segmented_images = []
-    for image in images:
-        output = remove(
-            image,
-            session=session,
-            alpha_matting=True,
-            alpha_matting_foreground_threshold=255,
-            alpha_matting_background_threshold=0,
-            post_process_mask=True,
-            bgcolor=(255, 255, 255, 255),
-        )
-        # remove alpha channel
-        output = output[:, :, :3]
-
-        segmented_images.append(output)
-
-    return segmented_images
-
-
 def augment_images(images, labels, num_aug=7):
     aug_images = []
     aug_labels = []

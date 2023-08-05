@@ -1,0 +1,1 @@
+python3 train.py --data_dir dataset/2-cropped --flag 2
