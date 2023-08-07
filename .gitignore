@@ -180,3 +180,4 @@ pyrightconfig.json
 dataset/
 .ipynb_checkpoints/
 checkpoints/
+results/
