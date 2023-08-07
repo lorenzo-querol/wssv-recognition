@@ -1,3 +1,0 @@
-model_type,tp,tn,fp,fn
-tensorflow,7,80,0,2
-onnx,7,80,0,2
